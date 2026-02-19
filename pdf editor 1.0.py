@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QPushButton, QFileDialog, 
                              QDoubleSpinBox, QGroupBox, QTabWidget, 
                              QScrollArea, QMessageBox, QSplitter, QProgressBar,
-                             QInputDialog)
+                             QInputDialog, QCheckBox)
 from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QAction, QPen
 
@@ -169,6 +169,12 @@ class PDFEditor(QMainWindow):
         comp_group.setLayout(comp_layout)
         settings_layout.addWidget(comp_group)
 
+        # 홀수/짝수 동일 적용 체크박스 (위치 변경됨)
+        self.check_sync = QCheckBox("홀수/짝수 동일 적용")
+        self.check_sync.setStyleSheet("font-weight: bold; color: #2c3e50; margin: 10px 0px 5px 2px;")
+        self.check_sync.stateChanged.connect(self.sync_all_settings)
+        settings_layout.addWidget(self.check_sync)
+
         # 탭 (홀수/짝수)
         self.tabs = QTabWidget()
         self.odd_tab = self.create_page_settings_tab('odd')
@@ -233,7 +239,34 @@ class PDFEditor(QMainWindow):
 
     def update_setting(self, page_type, key, value):
         self.settings[page_type][key] = value
+        
+        # 동일 적용 체크되어 있으면 반대편도 업데이트
+        if self.check_sync.isChecked():
+            other_type = 'even' if page_type == 'odd' else 'odd'
+            self.settings[other_type][key] = value
+            # UI 입력칸도 업데이트 (재귀 호출 방지를 위해 signals blocked 필요할 수도 있지만, 
+            # valueChanged는 값이 다를 때만 발생하므로 직접 set 가능)
+            self.inputs[f'{other_type}_{key}'].blockSignals(True)
+            self.inputs[f'{other_type}_{key}'].setValue(value)
+            self.inputs[f'{other_type}_{key}'].blockSignals(False)
+            
         self.update_preview()
+
+    def sync_all_settings(self, state):
+        if state == Qt.CheckState.Checked.value:
+            # 현재 선택된 탭의 설정을 기준으로 반대편 동기화
+            idx = self.tabs.currentIndex()
+            src_type = 'odd' if idx == 0 else 'even'
+            target_type = 'even' if idx == 0 else 'odd'
+            
+            for key in ['left', 'right', 'top', 'bottom']:
+                val = self.settings[src_type][key]
+                self.settings[target_type][key] = val
+                self.inputs[f'{target_type}_{key}'].blockSignals(True)
+                self.inputs[f'{target_type}_{key}'].setValue(val)
+                self.inputs[f'{target_type}_{key}'].blockSignals(False)
+            
+            self.update_preview()
 
     def reset_settings(self):
         # 모든 입력값을 0으로 초기화
