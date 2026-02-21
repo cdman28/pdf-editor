@@ -1,8 +1,8 @@
 {
     "last_settings": {
         "odd": {
-            "left": 0.0,
-            "right": 0.0,
+            "left": 12.0,
+            "right": -8.0,
             "top": 0.0,
             "bottom": 0.0
         },
@@ -13,5 +13,6 @@
             "bottom": 0.0
         }
     },
-    "presets": {}
+    "presets": {},
+    "last_dir": ""
 }

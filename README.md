@@ -1,4 +1,4 @@
-# PDF 여백 편집기 (PDF Margin Editor) 1.0
+# PDF 여백 편집기 (PDF Margin Editor) 1.1
 
 스캔된 PDF 문서의 홀수/짝수 페이지 여백을 정교하게 조정할 수 있는 데스크탑 애플리케이션입니다. 특히 제본된 책을 스캔했을 때 발생하는 여백 불균형을 해결하는 데 최적화되어 있습니다.
 
@@ -14,7 +14,7 @@
 ## 🛠 설치 및 실행
 
 ### 실행 파일 사용
-1. `dist` 폴더 내의 `pdf editor 1.0.exe` 파일을 실행합니다.
+1. `dist` 폴더 내의 `pdf editor 1.1.exe` 파일을 실행합니다.
 2. 추가 설치 과정 없이 바로 사용 가능합니다.
 
 ### 소스 코드 실행 (개발자용)
@@ -22,7 +22,7 @@
 - 필수 라이브러리: `PyQt6`, `PyMuPDF (fitz)`
 ```bash
 pip install PyQt6 PyMuPDF
-python "pdf editor 1.0.py"
+python "pdf editor 1.1.py"
 ```
 
 ## 📖 사용 방법
@@ -40,4 +40,4 @@ python "pdf editor 1.0.py"
 
 ---
 **개발자**: cdman28
-**업데이트**: 2026-02-19
+**업데이트**: 2026-02-21
