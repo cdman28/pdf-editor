@@ -508,20 +508,17 @@ class PDFEditor(QMainWindow):
                     if new_mb.width < 10: new_mb.x1 = new_mb.x0 + 10
                     if new_mb.height < 10: new_mb.y1 = new_mb.y0 + 10
 
-                    # [핵심] MediaBox와 CropBox를 동일하게 설정해야 늘어난 여백이 화면에 보임
-                    # 'CropBox not in MediaBox' 에러 방지를 위해 단계별로 설정하여 유효성 범위를 유지
-                    temp_mb = mb | new_mb  # 기존 영역과 새 영역을 모두 포함하는 임시 박스
-                    cp.set_mediabox(temp_mb)
-                    cp.set_cropbox(new_mb)
+                    # [핵심] CropBox/ArtBox/BleedBox/TrimBox를 페이지 딕셔너리에서
+                    # 완전히 삭제한 뒤 MediaBox만 새로 설정.
+                    # set_* 방식은 상위 페이지 트리에서 상속된 값을 제거하지 못해
+                    # clean=True 저장 시 'CropBox not in MediaBox' 오류가 발생하므로
+                    # xref_set_key로 null(삭제) 처리하는 것이 가장 안전함.
+                    for box_key in ("CropBox", "ArtBox", "BleedBox", "TrimBox"):
+                        new_doc.xref_set_key(cp.xref, box_key, "null")
                     cp.set_mediabox(new_mb)
-                    
-                    # 다른 경계 박스(ArtBox, BleedBox 등)가 MediaBox를 벗어나 에러가 발생하는 경우를 방지
-                    cp.set_artbox(new_mb)
-                    cp.set_bleedbox(new_mb)
-                    cp.set_trimbox(new_mb)
             
             # 저장: 압축 여부와 상관없이 항상 PDF 구조 최적화(garbage=4, deflate) 적용
-            new_doc.save(path, garbage=4, deflate=True, clean=True)
+            new_doc.save(path, garbage=4, deflate=True, clean=False)
             
             new_doc.close()
             
