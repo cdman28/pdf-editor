@@ -1,4 +1,3 @@
-
 import sys
 import fitz  # PyMuPDF
 import os
@@ -30,7 +29,7 @@ class AutoScrollArea(QScrollArea):
 class PDFEditor(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PDF 여백 편집기 1.7")
+        self.setWindowTitle("PDF 여백 편집기 1.9")
         self.setGeometry(100, 100, 1200, 850)
 
         # 상태 변수
@@ -59,7 +58,7 @@ class PDFEditor(QMainWindow):
 
         self.init_ui()
         self.load_settings() # 자동 불러오기
-        print("SYSTEM: PDF Editor Initialized. 1.7 Active.")
+        print("SYSTEM: PDF Editor Initialized. 1.9 Active.")
 
     def init_ui(self):
         main_widget = QWidget()
@@ -109,11 +108,11 @@ class PDFEditor(QMainWindow):
         self.scroll_area.setWidget(self.image_label)
         preview_layout.addWidget(self.scroll_area)
 
-        # 하단 진행바 (좌측 영역에 배치)
+        # 하단 진행바 (좌측 영역에 배치) - (변환 진행률) 설명 문구 추가
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(True)
-        self.progress_bar.setFormat("%p%")
+        self.progress_bar.setFormat("%p% (변환 진행률)")
         preview_layout.addWidget(self.progress_bar)
 
         splitter.addWidget(preview_container)
@@ -177,7 +176,16 @@ class PDFEditor(QMainWindow):
         comp_group.setLayout(comp_layout)
         settings_layout.addWidget(comp_group)
 
-        # 홀수/짝수 동일 적용 체크박스 (위치 변경됨)
+        # 페이지 크기 정보 표시 그룹 (실시간)
+        size_group = QGroupBox("페이지 크기 정보 (실시간)")
+        size_layout = QVBoxLayout()
+        self.lbl_page_size = QLabel("📄 현재 페이지 크기: PDF 열기 필요")
+        self.lbl_page_size.setStyleSheet("font-size: 12px; color: #2c3e50; font-weight: bold;")
+        size_layout.addWidget(self.lbl_page_size)
+        size_group.setLayout(size_layout)
+        settings_layout.addWidget(size_group)
+
+        # 홀수/짝수 동일 적용 체크박스
         self.check_sync = QCheckBox("홀수/짝수 동일 적용")
         self.check_sync.setStyleSheet("font-weight: bold; color: #2c3e50; margin: 10px 0px 5px 2px;")
         self.check_sync.stateChanged.connect(self.sync_all_settings)
@@ -252,8 +260,6 @@ class PDFEditor(QMainWindow):
         if self.check_sync.isChecked():
             other_type = 'even' if page_type == 'odd' else 'odd'
             self.settings[other_type][key] = value
-            # UI 입력칸도 업데이트 (재귀 호출 방지를 위해 signals blocked 필요할 수도 있지만, 
-            # valueChanged는 값이 다를 때만 발생하므로 직접 set 가능)
             self.inputs[f'{other_type}_{key}'].blockSignals(True)
             self.inputs[f'{other_type}_{key}'].setValue(value)
             self.inputs[f'{other_type}_{key}'].blockSignals(False)
@@ -340,24 +346,51 @@ class PDFEditor(QMainWindow):
             
             self.tabs.setCurrentIndex(1 if is_even else 0)
 
-    def prev_page(self):
-        if self.current_page_num > 0:
-            self.current_page_num -= 1
-            self.update_ui_state()
-            self.update_preview()
-
-    def next_page(self):
-        if self.doc and self.current_page_num < len(self.doc) - 1:
-            self.current_page_num += 1
-            self.update_ui_state()
-            self.update_preview()
+    def get_paper_hint(self, width_mm, height_mm):
+        """mm 크기를 기반으로 표준 용지 규격 힌트 제공"""
+        w, h = min(width_mm, height_mm), max(width_mm, height_mm)
+        if abs(w - 210) <= 3 and abs(h - 297) <= 3:
+            return " (A4 수준)"
+        elif abs(w - 182) <= 3 and abs(h - 257) <= 3:
+            return " (B5 수준)"
+        elif abs(w - 215.9) <= 3 and abs(h - 279.4) <= 3:
+            return " (Letter 수준)"
+        elif abs(w - 148) <= 3 and abs(h - 210) <= 3:
+            return " (A5 수준)"
+        elif abs(w - 297) <= 3 and abs(h - 420) <= 3:
+            return " (A3 수준)"
+        return ""
 
     def update_preview(self):
         if not self.doc:
+            self.lbl_page_size.setText("📄 현재 페이지 크기: PDF 열기 필요")
             return
 
         try:
             page = self.doc.load_page(self.current_page_num)
+            
+            # --- 실시간 사이즈 표시 계산 ---
+            pt_to_mm = 25.4 / 72.0
+            src_rect = page.bound()
+            orig_w_mm = src_rect.width * pt_to_mm
+            orig_h_mm = src_rect.height * pt_to_mm
+
+            cur = self.current_page_num + 1
+            is_even = (cur % 2 == 0)
+            setting = self.settings['even'] if is_even else self.settings['odd']
+
+            adj_w_mm = orig_w_mm + setting['left'] + setting['right']
+            adj_h_mm = orig_h_mm + setting['top'] + setting['bottom']
+            adj_w_mm = max(1.0, adj_w_mm)
+            adj_h_mm = max(1.0, adj_h_mm)
+
+            hint = self.get_paper_hint(adj_w_mm, adj_h_mm)
+
+            self.lbl_page_size.setText(
+                f"📄 현재 페이지 ({'짝수' if is_even else '홀수'}):\n"
+                f" • 원본 크기: {orig_w_mm:.1f} × {orig_h_mm:.1f} mm\n"
+                f" • 조정 크기: {adj_w_mm:.1f} × {adj_h_mm:.1f} mm{hint}"
+            )
             
             # 원본 렌더링
             zoom_matrix = fitz.Matrix(2.0, 2.0)
@@ -366,10 +399,6 @@ class PDFEditor(QMainWindow):
             fmt = QImage.Format.Format_RGBA8888 if pix.alpha else QImage.Format.Format_RGB888
             orig_qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
             orig_pixmap = QPixmap.fromImage(orig_qimg)
-            
-            cur = self.current_page_num + 1
-            is_even = (cur % 2 == 0)
-            setting = self.settings['even'] if is_even else self.settings['odd']
 
             mm_to_px = (72 / 25.4) * 2.0
 
@@ -433,8 +462,6 @@ class PDFEditor(QMainWindow):
             compression = int(self.spin_comp.value())
             do_compress = compression > 0
             
-            # JPEG 품질 계산: 구간별 완만한 감소
-            # 10% => 97, 30% => 90, 70% => 70, 100% => 50
             if compression <= 30:
                 jpg_quality = int(100 - compression * 0.33)
             elif compression <= 70:
@@ -443,18 +470,12 @@ class PDFEditor(QMainWindow):
                 jpg_quality = int(70 - (compression - 70) * 0.67)
             jpg_quality = max(50, jpg_quality)
             
-            # 압축 모드 (1~100%): 200 DPI - 속도와 품질의 균형
             COMPRESS_DPI = 200
             compress_matrix = fitz.Matrix(COMPRESS_DPI / 72.0, COMPRESS_DPI / 72.0)
             
-            # 비압축 모드 (0%): 300 DPI - 원본 스캔 해상도에 근접한 품질 보장
-            LOSSLESS_DPI = 300
-            lossless_matrix = fitz.Matrix(LOSSLESS_DPI / 72.0, LOSSLESS_DPI / 72.0)
-
             total_pages = len(self.doc)
             
             for i, page in enumerate(self.doc):
-                # 진행률 업데이트
                 progress = int((i + 1) / total_pages * 100)
                 self.progress_bar.setValue(progress)
                 QApplication.processEvents()
@@ -469,10 +490,7 @@ class PDFEditor(QMainWindow):
                 top = setting['top'] * mm_to_pt
                 bottom = setting['bottom'] * mm_to_pt
                 
-                # [핵심 수정] page.bound()는 회전이 자동 반영된 실제 가시 크기를 반환
-                # page.rect는 내부 저장 규격이지만, page.bound()는 화면에 보이는 크기와 동일
                 if do_compress:
-                    # 압축 모드: get_pixmap 렌더링 후 JPEG 저장
                     src_rect = page.bound()
                     new_width = max(10, src_rect.width + left + right)
                     new_height = max(10, src_rect.height + top + bottom)
@@ -482,15 +500,11 @@ class PDFEditor(QMainWindow):
                     img_data = pix.tobytes("jpg", jpg_quality=jpg_quality)
                     new_page.insert_image(target_rect, stream=img_data)
                 else:
-                    # [완전 무손실] insert_pdf + set_mediabox 방식
-                    # 렌더링 없이 원본 콘텐츠 그대로 복사 후 MediaBox만 조정
                     new_doc.insert_pdf(self.doc, from_page=i, to_page=i)
-                    cp = new_doc[-1]  # 방금 삽입된 페이지
-                    mb = cp.mediabox  # 현재 가시적 영역의 기준 박스
+                    cp = new_doc[-1]
+                    mb = cp.mediabox
                     rot = cp.rotation
 
-                    # 회전각에 따른 PDF 좌표계(x, y)와 시각적 방향(Left, Right, Top, Bottom) 매핑
-                    # PDF는 좌하단이 원점이며, rot=90(시계방향 회전) 시 좌표축이 뒤바뀜
                     if rot == 0:
                         new_mb = fitz.Rect(mb.x0 - left,   mb.y0 - bottom,
                                            mb.x1 + right,  mb.y1 + top)
@@ -504,28 +518,19 @@ class PDFEditor(QMainWindow):
                         new_mb = fitz.Rect(mb.x0 - top,    mb.y0 - right,
                                            mb.x1 + bottom, mb.y1 + left)
 
-                    # 최소 크기 제한 (PDF 규격 준수)
                     if new_mb.width < 10: new_mb.x1 = new_mb.x0 + 10
                     if new_mb.height < 10: new_mb.y1 = new_mb.y0 + 10
 
-                    # [핵심] CropBox/ArtBox/BleedBox/TrimBox를 페이지 딕셔너리에서
-                    # 완전히 삭제한 뒤 MediaBox만 새로 설정.
-                    # set_* 방식은 상위 페이지 트리에서 상속된 값을 제거하지 못해
-                    # clean=True 저장 시 'CropBox not in MediaBox' 오류가 발생하므로
-                    # xref_set_key로 null(삭제) 처리하는 것이 가장 안전함.
                     for box_key in ("CropBox", "ArtBox", "BleedBox", "TrimBox"):
                         new_doc.xref_set_key(cp.xref, box_key, "null")
                     cp.set_mediabox(new_mb)
             
-            # 저장: 압축 여부와 상관없이 항상 PDF 구조 최적화(garbage=4, deflate) 적용
             new_doc.save(path, garbage=4, deflate=True, clean=False)
-            
             new_doc.close()
             
-            # 후처리
             self.progress_bar.setValue(100)
             self.btn_next.setEnabled(True)
-            self.update_ui_state() # 버튼 상태 복구
+            self.update_ui_state()
 
             saved_size = os.path.getsize(path) / (1024 * 1024)
             QMessageBox.information(self, "성공", f"저장이 완료되었습니다.\n저장된 크기: {saved_size:.2f} MB")
@@ -542,7 +547,6 @@ class PDFEditor(QMainWindow):
                 with open(self.settings_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     
-                    # 최근 값 로드
                     if 'last_settings' in data:
                         last = data['last_settings']
                         for p_type in ['odd', 'even']:
@@ -550,18 +554,15 @@ class PDFEditor(QMainWindow):
                                 val = last.get(p_type, {}).get(key, 0.0)
                                 self.inputs[f'{p_type}_{key}'].setValue(val)
 
-                    # 프리셋 로드
                     if 'presets' in data:
                         self.presets = data['presets']
 
-                    # 최근 폴더 로드
                     self.last_dir = data.get('last_dir', '')
 
             except Exception as e:
                 print(f"설정 불러오기 실패: {e}")
 
     def save_settings_to_file(self):
-        # 현재 값과 프리셋을 저장
         data = {
             'last_settings': self.settings,
             'presets': self.presets,
@@ -574,14 +575,12 @@ class PDFEditor(QMainWindow):
             print(f"설정 저장 실패: {e}")
 
     def closeEvent(self, event):
-        # 프로그램 종료 시 자동 저장
         self.save_settings_to_file()
         event.accept()
 
     def save_preset_dialog(self):
         name, ok = QInputDialog.getText(self, "프리셋 저장", "프리셋 이름:")
         if ok and name:
-            # 현재 설정값을 깊은 복사로 저장
             import copy
             self.presets[name] = copy.deepcopy(self.settings)
             self.save_settings_to_file()
@@ -596,7 +595,6 @@ class PDFEditor(QMainWindow):
         name, ok = QInputDialog.getItem(self, "프리셋 불러오기", "프리셋 선택:", items, 0, False)
         if ok and name:
             data = self.presets[name]
-            # UI 업데이트 (설정값 반영)
             for p_type in ['odd', 'even']:
                 for key in ['left', 'right', 'top', 'bottom']:
                     val = data.get(p_type, {}).get(key, 0.0)
