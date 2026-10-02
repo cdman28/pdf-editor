@@ -346,6 +346,18 @@ class PDFEditor(QMainWindow):
             
             self.tabs.setCurrentIndex(1 if is_even else 0)
 
+    def prev_page(self):
+        if self.current_page_num > 0:
+            self.current_page_num -= 1
+            self.update_ui_state()
+            self.update_preview()
+
+    def next_page(self):
+        if self.doc and self.current_page_num < len(self.doc) - 1:
+            self.current_page_num += 1
+            self.update_ui_state()
+            self.update_preview()
+
     def get_paper_hint(self, width_mm, height_mm):
         """mm 크기를 기반으로 표준 용지 규격 힌트 제공"""
         w, h = min(width_mm, height_mm), max(width_mm, height_mm)
