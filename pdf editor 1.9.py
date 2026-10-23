@@ -29,7 +29,7 @@ class AutoScrollArea(QScrollArea):
 class PDFEditor(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PDF 여백 편집기 1.9")
+        self.setWindowTitle("PDF 여백 편집기 1.9.1")
         self.setGeometry(100, 100, 1200, 850)
 
         # 상태 변수
@@ -507,9 +507,27 @@ class PDFEditor(QMainWindow):
                     new_width = max(10, src_rect.width + left + right)
                     new_height = max(10, src_rect.height + top + bottom)
                     new_page = new_doc.new_page(width=new_width, height=new_height)
-                    target_rect = fitz.Rect(left, top, left + src_rect.width, top + src_rect.height)
-                    pix = page.get_pixmap(matrix=compress_matrix)
+
+                    # 음수 여백(자름) 처리: 잘릴 영역을 clip으로 제한 후 새 페이지에 배치
+                    # left/top이 양수면 여백 추가 → 이미지를 오른쪽/아래로 이동
+                    # left/top이 음수면 자르기  → 이미지를 (0,0)에서 시작하고 픽셀 clip 적용
+                    clip_x0 = max(0, -left)   # 원본에서 왼쪽으로 잘릴 pt
+                    clip_y0 = max(0, -top)    # 원본에서 위쪽으로 잘릴 pt
+                    clip_x1 = src_rect.width  - max(0, -right)  # 오른쪽 잘릴 pt 제거
+                    clip_y1 = src_rect.height - max(0, -bottom) # 아래쪽 잘릴 pt 제거
+                    clip_rect = fitz.Rect(clip_x0, clip_y0, clip_x1, clip_y1)
+
+                    # 새 페이지 내 이미지 배치 위치 (여백이 양수이면 그만큼 오프셋)
+                    img_x = max(0.0, left)
+                    img_y = max(0.0, top)
+
+                    pix = page.get_pixmap(matrix=compress_matrix, clip=clip_rect)
                     img_data = pix.tobytes("jpg", jpg_quality=jpg_quality)
+
+                    # 잘린 이미지가 차지하는 실제 pt 크기
+                    clipped_w = clip_x1 - clip_x0
+                    clipped_h = clip_y1 - clip_y0
+                    target_rect = fitz.Rect(img_x, img_y, img_x + clipped_w, img_y + clipped_h)
                     new_page.insert_image(target_rect, stream=img_data)
                 else:
                     new_doc.insert_pdf(self.doc, from_page=i, to_page=i)
